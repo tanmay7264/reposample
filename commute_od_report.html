@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commute OD Traffic Analysis – Pendeln</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e0e0e0; padding: 24px; }
+  h1 { text-align: center; font-size: 1.6rem; color: #fff; margin-bottom: 4px; }
+  .subtitle { text-align: center; color: #888; font-size: 0.9rem; margin-bottom: 28px; }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .kpi { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 10px; padding: 18px 16px; text-align: center; }
+  .kpi .value { font-size: 2rem; font-weight: 700; color: #4f9eff; }
+  .kpi .label { font-size: 0.75rem; color: #888; margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .card { background: #1a1d27; border: 1px solid #2a2d3e; border-radius: 10px; padding: 20px; }
+  .card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: .8px; color: #aaa; margin-bottom: 14px; border-bottom: 1px solid #2a2d3e; padding-bottom: 8px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { color: #888; font-weight: 600; text-align: left; padding: 6px 8px; border-bottom: 1px solid #2a2d3e; font-size: 0.75rem; text-transform: uppercase; }
+  td { padding: 7px 8px; border-bottom: 1px solid #1f2235; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1f2235; }
+  .rank { color: #555; font-size: 0.8rem; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pos { color: #4ade80; }
+  .neg { color: #f87171; }
+  .arrow-up { color: #4ade80; }
+  .arrow-dn { color: #f87171; }
+
+  .bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .bar-track { flex: 1; background: #0f1117; border-radius: 4px; height: 10px; }
+  .bar-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #4f9eff, #7b5ea7); }
+  .bar-label { font-size: 0.78rem; color: #aaa; width: 48px; text-align: right; }
+
+  .dist-row { margin-bottom: 14px; }
+  .dist-name { font-size: 0.82rem; color: #ccc; margin-bottom: 4px; }
+  .dist-bar-track { width: 100%; background: #0f1117; border-radius: 4px; height: 14px; position: relative; }
+  .dist-bar-fill { height: 100%; border-radius: 4px; }
+  .dist-short { background: linear-gradient(90deg, #4ade80, #22c55e); }
+  .dist-medium { background: linear-gradient(90deg, #4f9eff, #3b82f6); }
+  .dist-long { background: linear-gradient(90deg, #f87171, #ef4444); }
+  .dist-pct { font-size: 0.78rem; color: #aaa; margin-top: 3px; }
+
+  .ratio-badge { display: inline-block; background: #2a1f3d; color: #c084fc; border-radius: 4px; padding: 2px 7px; font-size: 0.78rem; font-weight: 700; }
+
+  @media (max-width: 700px) {
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Commute OD Traffic Analysis</h1>
+<p class="subtitle">Pendeln — Origin-Destination flows across 10 city zones &nbsp;|&nbsp; Gravity model</p>
+
+<!-- KPI cards -->
+<div class="kpi-grid">
+  <div class="kpi"><div class="value">10</div><div class="label">Zones</div></div>
+  <div class="kpi"><div class="value">90</div><div class="label">OD Pairs</div></div>
+  <div class="kpi"><div class="value">7,044</div><div class="label">Total Trips</div></div>
+  <div class="kpi"><div class="value">78.3</div><div class="label">Avg Trips / Pair</div></div>
+</div>
+
+<div class="grid2">
+
+  <!-- Top 10 corridors -->
+  <div class="card">
+    <h2>Top 10 OD Corridors</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Origin</th>
+          <th>Destination</th>
+          <th class="num">Trips</th>
+          <th class="num">km</th>
+          <th style="width:120px">Volume</th>
+        </tr>
+      </thead>
+      <tbody id="corridors"></tbody>
+    </table>
+  </div>
+
+  <!-- Zone summary -->
+  <div class="card">
+    <h2>Zone Departure / Arrival Balance</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Zone</th>
+          <th class="num">Dep.</th>
+          <th class="num">Arr.</th>
+          <th class="num">Net</th>
+        </tr>
+      </thead>
+      <tbody id="zones"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<div class="grid2">
+
+  <!-- Distance bands -->
+  <div class="card">
+    <h2>Trips by Distance Band</h2>
+    <div id="dist"></div>
+  </div>
+
+  <!-- Directional balance -->
+  <div class="card">
+    <h2>Directional Asymmetry (top pairs)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Pair</th>
+          <th class="num">A→B</th>
+          <th class="num">B→A</th>
+          <th class="num">Ratio</th>
+        </tr>
+      </thead>
+      <tbody id="asym"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const corridors = [
+  ["Kreuzberg","Mitte",580,2.24],
+  ["Schöneberg","Mitte",497,2.50],
+  ["Neukölln","Kreuzberg",308,2.24],
+  ["Friedrichshain","Mitte",303,3.16],
+  ["Prenzlauer Berg","Mitte",275,3.35],
+  ["Mitte","Kreuzberg",259,2.24],
+  ["Prenzlauer Berg","Friedrichshain",237,2.50],
+  ["Mitte","Schöneberg",183,2.50],
+  ["Friedrichshain","Prenzlauer Berg",182,2.50],
+  ["Mitte","Friedrichshain",147,3.16],
+];
+const maxTrips = corridors[0][2];
+const tbody = document.getElementById("corridors");
+corridors.forEach(([o,d,t,km],i)=>{
+  const pct = (t/maxTrips*100).toFixed(1);
+  tbody.innerHTML += `<tr>
+    <td class="rank">${i+1}</td>
+    <td>${o}</td>
+    <td>${d}</td>
+    <td class="num">${t.toLocaleString()}</td>
+    <td class="num">${km}</td>
+    <td><div class="bar-wrap"><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div></div></td>
+  </tr>`;
+});
+
+const zones = [
+  ["Mitte",837,2207],
+  ["Prenzlauer Berg",849,670],
+  ["Friedrichshain",809,852],
+  ["Kreuzberg",1102,1126],
+  ["Schöneberg",873,583],
+  ["Tempelhof",494,303],
+  ["Neukölln",792,462],
+  ["Treptow",452,261],
+  ["Pankow",400,351],
+  ["Weissensee",436,229],
+];
+const ztbody = document.getElementById("zones");
+zones.forEach(([z,dep,arr])=>{
+  const net = arr - dep;
+  const cls = net >= 0 ? "pos" : "neg";
+  const arrow = net >= 0 ? "▲" : "▼";
+  ztbody.innerHTML += `<tr>
+    <td>${z}</td>
+    <td class="num">${dep.toLocaleString()}</td>
+    <td class="num">${arr.toLocaleString()}</td>
+    <td class="num ${cls}">${net >= 0 ? "+" : ""}${net.toLocaleString()} ${arrow}</td>
+  </tr>`;
+});
+
+const distData = [
+  ["< 3 km  (short)","dist-short",2361,33.5],
+  ["3–6 km  (medium)","dist-medium",3919,55.6],
+  ["> 6 km  (long)","dist-long",764,10.8],
+];
+const distDiv = document.getElementById("dist");
+distData.forEach(([label,cls,count,pct])=>{
+  distDiv.innerHTML += `<div class="dist-row">
+    <div class="dist-name">${label} &nbsp;<strong>${count.toLocaleString()}</strong> trips</div>
+    <div class="dist-bar-track"><div class="dist-bar-fill ${cls}" style="width:${pct}%"></div></div>
+    <div class="dist-pct">${pct}% of all commutes</div>
+  </div>`;
+});
+
+const asym = [
+  ["Mitte","Weissensee",16,81,4.76],
+  ["Mitte","Tempelhof",33,133,3.91],
+  ["Mitte","Treptow",24,94,3.76],
+  ["Mitte","Neukölln",39,145,3.62],
+  ["Mitte","Pankow",30,99,3.19],
+  ["Mitte","Schöneberg",183,497,2.70],
+  ["Kreuzberg","Neukölln",115,308,2.66],
+  ["Mitte","Prenzlauer Berg",106,275,2.57],
+];
+const atbody = document.getElementById("asym");
+asym.forEach(([a,b,fwd,bwd,ratio])=>{
+  atbody.innerHTML += `<tr>
+    <td>${a} ↔ ${b}</td>
+    <td class="num">${fwd.toLocaleString()}</td>
+    <td class="num">${bwd.toLocaleString()}</td>
+    <td class="num"><span class="ratio-badge">${ratio}x</span></td>
+  </tr>`;
+});
+</script>
+
+</body>
+</html>
